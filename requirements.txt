@@ -1,0 +1,10 @@
+django
+django-ninja
+django-ninja-extra
+langchain
+langgraph
+openai
+pandas
+pydantic
+python-dotenv
+langchain-openai

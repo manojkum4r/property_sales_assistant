@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Silver Land Properties AI Assistant</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px; }
+        #chat-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #chat-window {
+            height: 400px;
+            padding: 15px;
+            overflow-y: auto;
+            border-bottom: 1px solid #eee;
+        }
+        .message {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            border-radius: 18px;
+            max-width: 80%;
+            line-height: 1.4;
+        }
+        .message.ai {
+            background-color: #e6f7ff;
+            color: #333;
+            float: left;
+            clear: both;
+            border-bottom-left-radius: 2px;
+        }
+        .message.human {
+            background-color: #007bff;
+            color: white;
+            float: right;
+            clear: both;
+            border-bottom-right-radius: 2px;
+        }
+        #input-area {
+            display: flex;
+            padding: 10px;
+        }
+        #user-input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        #send-button {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #send-button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+<div id="chat-container">
+    <div id="chat-window">
+        <div class="message ai">Initializing chat...</div>
+    </div>
+    <div id="input-area">
+        <input type="text" id="user-input" placeholder="Type your message..." disabled>
+        <button id="send-button" disabled onclick="sendMessage()">Send</button>
+    </div>
+</div>
+
+<script>
+    // Global variable to hold the conversation ID
+    let conversationId = null;
+    const chatWindow = document.getElementById('chat-window');
+    const userInput = document.getElementById('user-input');
+    const sendButton = document.getElementById('send-button');
+
+    // --- Utility Functions ---
+
+    /** Adds a message to the chat window */
+    function displayMessage(sender, text) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${sender.toLowerCase()}`;
+        messageDiv.innerText = text;
+        chatWindow.appendChild(messageDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight; // Scroll to bottom
+    }
+
+    /** Disables/Enables user interaction */
+    function toggleInput(enabled) {
+        userInput.disabled = !enabled;
+        sendButton.disabled = !enabled;
+        if (enabled) {
+            userInput.focus();
+        }
+    }
+
+    // --- API Call Functions ---
+
+    /** * 1. Starts the conversation by POSTing to /api/conversations
+     * 2. Saves the conversation ID
+     * 3. Displays the initial AI greeting
+     */
+    async function startConversation() {
+        try {
+            const response = await fetch('/api/conversations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            // CRITICAL STEP 1: Save the ID from the response
+            conversationId = data.id; 
+            
+            // Clear the "Initializing" message
+            chatWindow.innerHTML = ''; 
+
+            // Display the initial AI greeting
+            if (data.messages && data.messages.length > 0) {
+                displayMessage('AI', data.messages[0].text);
+            }
+            
+            toggleInput(true); // Enable input after successful start
+
+        } catch (error) {
+            console.error("Error starting conversation:", error);
+            displayMessage('AI', "Error initializing chat. Please check the backend server.");
+            toggleInput(false);
+        }
+    }
+
+    /** * 1. Sends the user's message to /api/agents/chat
+     * 2. Displays the user's message
+     * 3. Displays the AI's reply
+     */
+    async function sendMessage() {
+        const messageText = userInput.value.trim();
+        if (!messageText || conversationId === null) {
+            return;
+        }
+
+        // Display user message immediately
+        displayMessage('Human', messageText);
+        userInput.value = ''; // Clear input
+        toggleInput(false); // Disable input while waiting for AI
+
+        try {
+            const response = await fetch('/api/agents/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                // CRITICAL STEP 2: Include the conversationId in the payload
+                body: JSON.stringify({
+                    message: messageText,
+                    conversation_id: conversationId 
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            // Display the AI response
+            displayMessage('AI', data.reply);
+            
+        } catch (error) {
+            console.error("Error sending message:", error);
+            displayMessage('AI', "Sorry, I ran into an error. Please try again.");
+        } finally {
+            toggleInput(true); // Re-enable input
+        }
+    }
+
+    // --- Event Listeners and Initialization ---
+
+    // Handle 'Enter' keypress in the input field
+    userInput.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault(); // Prevents newline in input box
+            sendMessage();
+        }
+    });
+
+    // Start the chat when the page loads
+    window.onload = startConversation;
+</script>
+
+</body>
+</html>
